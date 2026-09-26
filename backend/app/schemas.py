@@ -107,11 +107,13 @@ class PlanEntry(BaseModel):
     field_0: str | None = None  # 计划编号
     field_1: str | None = None  # 养护类型
     field_2: str | None = None  # 养护对象
-    field_3: str | None = None  # 计划工期
-    field_4: str | None = None  # 预算金额
-    field_5: str | None = None  # 编制人员
-    field_6: str | None = None  # 审批人员
-    field_7: str | None = None  # 计划状态
+    field_3: str | None = None  # 计划开始日期
+    field_4: str | None = None  # 计划工期
+    field_5: str | None = None  # 预算金额
+    field_6: str | None = None  # 编制人员
+    field_7: str | None = None  # 审批人员
+    field_8: str | None = None  # 计划状态
+    field_9: str | None = None  # 驳回理由
 
 class WorkEntry(BaseModel):
     """施工任务明细结构。"""
