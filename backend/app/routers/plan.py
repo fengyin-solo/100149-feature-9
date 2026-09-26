@@ -12,14 +12,14 @@ router = APIRouter(prefix="/api/plan", tags=["养护计划"])
 
 service = PlanService()
 
-LIST_FIELDS = ["计划编号", "养护类型", "养护对象", "计划工期", "预算金额", "编制人员", "审批人员", "计划状态"]
-STATUSES = ["待编制", "待审批", "已批复", "已作废"]
+LIST_FIELDS = ["计划编号", "养护类型", "养护对象", "计划开始日期", "计划工期", "预算金额", "编制人员", "审批人员", "计划状态", "驳回理由"]
+STATUSES = ["待编制", "待审批", "已批复", "已驳回", "已作废"]
 
 
 @router.get("", response_model=PageResult[dict])
 def list_entries(
     keyword: str | None = Query(default=None, description="按计划编号检索"),
-    status: str | None = Query(default=None, description="待编制、待审批、已批复、已作废"),
+    status: str | None = Query(default=None, description="待编制、待审批、已批复、已驳回、已作废"),
     page: int = 1,
     size: int = 20,
 ) -> PageResult[dict]:
@@ -30,10 +30,23 @@ def list_entries(
     return PageResult(items=items, total=total, page=page, size=size)
 
 
+@router.get("/rules")
+def list_rules() -> dict[str, Any]:
+    """判定口径：按养护类型给出预算金额与计划工期的可接受范围，登记时对照填写。"""
+    return {"module": "plan", "rules": service.list_rules()}
+
+
+@router.get("/export")
+def export_entries() -> dict[str, Any]:
+    """导出养护计划清单：返回当前过滤条件下的全量数据。"""
+    items, total = service.list_entries(page=1, size=10000)
+    return {"module": "plan", "total": total, "items": items}
+
+
 @router.get("/{entry_id}", response_model=dict)
 def get_entry(entry_id: int) -> dict:
     """读取单条养护计划明细；不存在时给出可读的错误说明。"""
-    entry = service.get_entry(entry_id)
+    entry = service.get_detail(entry_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"养护计划 {entry_id} 不存在或已归档")
     return entry
@@ -48,6 +61,15 @@ def create_entry(payload: EntryPayload) -> ActionResult:
     return ActionResult(ok=True, message="养护计划已登记", entry=entry)
 
 
+@router.put("/{entry_id}", response_model=ActionResult)
+def update_entry(entry_id: int, payload: EntryPayload) -> ActionResult:
+    """修改待编制或已驳回的计划；被拦下的计划改完回到待编制，可接着重新提交。"""
+    entry, message = service.update_entry(entry_id, payload.values)
+    if entry is None:
+        return ActionResult(ok=False, message=message)
+    return ActionResult(ok=True, message=message, entry=entry)
+
+
 @router.post("/{entry_id}/actions", response_model=ActionResult)
 def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
     """对单条养护计划执行提交审批、确认批复、作废计划；不允许的动作会被拦下并说明原因。"""
@@ -56,10 +78,3 @@ def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)
-
-
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出养护计划清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "plan", "total": total, "items": items}
